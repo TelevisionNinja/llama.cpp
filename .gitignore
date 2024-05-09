@@ -36,6 +36,7 @@ gcovr-report/
 
 build*
 !build.zig
+!BuildTypes.cmake
 cmake-build-*
 out/
 tmp/
