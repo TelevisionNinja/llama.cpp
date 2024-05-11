@@ -19,10 +19,10 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
     // upper limit for the number of tokens
     int n_tokens = text.length() + add_bos;
     std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, false);
+    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, true);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, false);
+        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, true);
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
@@ -69,10 +69,10 @@ struct whisper_params {
     std::string wake_cmd    = "";
     std::string heard_ok    = "";
     std::string language    = "en";
-    std::string model_wsp   = "models/ggml-small.en-q5_1.bin";
-    std::string model_llama = "models/Meta-Llama-3-8B-Instruct-IQ4_XS.gguf";
-    std::string speak       = "src/llama.cpp/common/talk/speak";
-    std::string speak_file  = "src/llama.cpp/common/talk/to_speak.txt";
+    std::string model_wsp   = "./models/ggml-small.en-q5_1.bin";
+    std::string model_llama = "./models/Meta-Llama-3-8B-Instruct-IQ4_XS.gguf";
+    std::string speak       = "./src/llama.cpp/common/talk/speak.sh";
+    std::string speak_file  = "./src/llama.cpp/common/talk/to_speak.txt";
     std::string prompt      = "";
     std::string fname_out;
     std::string path_session = ""; // path to file for saving/loading model eval state
@@ -248,27 +248,15 @@ std::vector<std::string> get_words(const std::string &txt) {
 
 const std::string k_prompt_whisper = R"(A conversation with a friend called {1}.)";
 
-const std::string k_prompt_llama = R"(Write a singular response to {0} as {1}, where the context is that {0} is talking with a friend named {1}.
+const std::string k_prompt_llama = R"(<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+Write a singular response to {0} as {1}, where the context is that {0} is talking with a friend named {1}.
 {1} is a character from My Little Pony: Frindship Is Magic.
 The transcript only consists of what {0} and {1} say to each other.
 Only use text.
 Do not include annotations, sounds, emojis, code, or markup like HTML and Markdown.
 {1} responds with short and concise responses.
-Only write a singular response to {0} as {1}, not a continuing transcript.
-
-{0}{4} Hello, {1}!
-{1}{4} Hello {0}!
-{0}{4} What time is it?
-{1}{4} It is {2} o'clock.
-{0}{4} What year is it?
-{1}{4} We are in {3}.
-{0}{4} What is a cat?
-{1}{4} A cat is a domestic species of small carnivorous mammal. It is the only domesticated species in the family Felidae.
-{0}{4} Name a color.
-{1}{4} Blue
-{0}{4} Who is the princess of friendship?
-{1}{4} Twilight Sparkle
-{0}{4})";
+Only write a singular response to {0} as {1}, not a continuing transcript.<|eot_id|>)"; // llama 3 prompt format
 
 int main(int argc, char ** argv) {
     whisper_params params;
@@ -348,8 +336,6 @@ int main(int argc, char ** argv) {
 
     float prob0 = 0.0f;
 
-    const std::string chat_symb = ":";
-
     std::vector<float> pcmf32_cur;
     std::vector<float> pcmf32_prompt;
 
@@ -357,9 +343,6 @@ int main(int argc, char ** argv) {
 
     // construct the initial prompt for LLaMA inference
     std::string prompt_llama = params.prompt.empty() ? k_prompt_llama : params.prompt;
-
-    // need to have leading ' '
-    prompt_llama.insert(0, 1, ' ');
 
     prompt_llama = ::replace(prompt_llama, "{0}", params.person);
     prompt_llama = ::replace(prompt_llama, "{1}", params.bot_name);
@@ -390,13 +373,25 @@ int main(int argc, char ** argv) {
         prompt_llama = ::replace(prompt_llama, "{3}", year_str);
     }
 
-    prompt_llama = ::replace(prompt_llama, "{4}", chat_symb);
-
     llama_batch batch = llama_batch_init(llama_n_ctx(ctx_llama), 0, 1);
 
     // init session
     std::string path_session = params.path_session;
     std::vector<llama_token> session_tokens;
+
+    //----------------------------------------------------------------
+
+    // // use prompt format
+    // llama_chat_message conversation[] = {
+    //     {"system", prompt_llama.c_str()}
+    // };
+
+    // std::vector<char> formatted_prompt(1024);
+    // llama_chat_apply_template(model_llama, nullptr, conversation, 1, false, formatted_prompt.data(), formatted_prompt.size()); // llama_chat_apply_template() is very slow
+    // prompt_llama.assign(formatted_prompt.data(), formatted_prompt.size());
+
+    //----------------------------------------------------------------
+
     auto embd_inp = ::llama_tokenize(ctx_llama, prompt_llama, true);
 
     if (!path_session.empty()) {
@@ -490,7 +485,6 @@ int main(int argc, char ** argv) {
     }
 
     printf("\n");
-    printf("%s%s", params.person.c_str(), chat_symb.c_str());
     fflush(stdout);
 
     // clear audio buffer
@@ -506,11 +500,6 @@ int main(int argc, char ** argv) {
     int n_session_consumed = !path_session.empty() && session_tokens.size() > 0 ? session_tokens.size() : 0;
 
     std::vector<llama_token> embd;
-
-    // reverse prompts for detecting when it's time to stop speaking
-    std::vector<std::string> antiprompts = {
-        params.person + chat_symb,
-    };
 
     // main loop
     while (is_running) {
@@ -601,10 +590,29 @@ int main(int argc, char ** argv) {
 
                 force_speak = false;
 
-                text_heard.insert(0, 1, ' ');
-                text_heard += "\n" + params.bot_name + chat_symb;
                 fprintf(stdout, "%s%s%s", "\033[1m", text_heard.c_str(), "\033[0m");
                 fflush(stdout);
+                printf("\n\n%s: ", params.bot_name.c_str());
+
+                //------------------------------------------------
+
+                // // use prompt format
+                // llama_chat_message heard_conversation[] = {
+                //     {"user", ("\n\n" + text_heard).c_str()}
+                // };
+                // std::vector<char> heard_formatted_prompt(1024);
+                // llama_chat_apply_template(model_llama, nullptr, heard_conversation, 1, true, heard_formatted_prompt.data(), heard_formatted_prompt.size()); // llama_chat_apply_template() is very slow
+                // text_heard = std::string(heard_formatted_prompt.begin(), heard_formatted_prompt.end());
+
+                //------------------------------------------------
+
+                text_heard = "\n<|start_header_id|>" +
+                            params.person +
+                            "<|end_header_id|>\n\n" +
+                            text_heard +
+                            "<|eot_id|>\n<|start_header_id|>" +
+                            params.bot_name +
+                            "<|end_header_id|>\n\n"; // llama 3 prompt format
 
                 embd = ::llama_tokenize(ctx_llama, text_heard, false);
 
@@ -741,40 +749,20 @@ int main(int argc, char ** argv) {
                             }
                         }
 
-                        if (id != llama_token_eos(model_llama)) {
+                        if (!llama_token_is_eog(model_llama, id) && id != llama_token_nl(model_llama)) {
                             // add it to the context
                             embd.push_back(id);
 
-                            if (llama_token_to_piece(ctx_llama, id) == "\n") {
-                                audio.clear();
-                                printf("DEBUGGING: \"%s\"", llama_token_to_piece(ctx_llama, id).c_str());
-                                fflush(stdout);
-                                done = true;
-                                continue;
-                            }
+                            std::string piece = llama_token_to_piece(ctx_llama, id);
+                            text_to_speak += piece;
 
-                            text_to_speak += llama_token_to_piece(ctx_llama, id);
-
-                            printf("%s", llama_token_to_piece(ctx_llama, id).c_str());
+                            printf("%s", piece.c_str());
                             fflush(stdout);
                         }
-                    }
-
-                    {
-                        std::string last_output;
-                        for (int i = embd_inp.size() - 16; i < (int) embd_inp.size(); i++) {
-                            last_output += llama_token_to_piece(ctx_llama, embd_inp[i]);
-                        }
-                        last_output += llama_token_to_piece(ctx_llama, embd[0]);
-
-                        for (std::string & antiprompt : antiprompts) {
-                            if (last_output.find(antiprompt.c_str(), last_output.length() - antiprompt.length(), antiprompt.length()) != std::string::npos) {
-                                done = true;
-                                text_to_speak = ::replace(text_to_speak, antiprompt, "");
-                                fflush(stdout);
-                                need_to_save_session = true;
-                                break;
-                            }
+                        else {
+                            done = true;
+                            fflush(stdout);
+                            need_to_save_session = true;
                         }
                     }
 
