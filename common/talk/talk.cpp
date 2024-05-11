@@ -254,7 +254,7 @@ Write a singular response to {0} as {1}, where the context is that {0} is talkin
 {1} is a character from My Little Pony: Frindship Is Magic.
 The transcript only consists of what {0} and {1} say to each other.
 Only use text.
-Do not include annotations, sounds, emojis, code, or markup like HTML and Markdown.
+Do not include annotations, symbols, sounds, emojis, or code.
 {1} responds with short and concise responses.
 Only write a singular response to {0} as {1}, not a continuing transcript.<|eot_id|>)"; // llama 3 prompt format
 
