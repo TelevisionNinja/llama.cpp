@@ -760,6 +760,8 @@ int main(int argc, char ** argv) {
                             fflush(stdout);
                         }
                         else {
+                            printf("\n");
+
                             done = true;
                             fflush(stdout);
                             need_to_save_session = true;
