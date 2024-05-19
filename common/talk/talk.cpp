@@ -19,10 +19,10 @@ std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::s
     // upper limit for the number of tokens
     int n_tokens = text.length() + add_bos;
     std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, false);
+    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, true);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, false);
+        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, true);
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
