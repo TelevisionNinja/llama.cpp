@@ -16,8 +16,5 @@ elif installed say; then
   say -f $2
 
 else
-  echo 'Install espeak ("brew install espeak" or "apt-get install espeak"),'
-  echo 'piper ("pip install piper-tts" or https://github.com/rhasspy/piper) with aplay,'
-  echo 'or elevenlabs ("pip install elevenlabs") with ffplay.'
-  echo '(export ELEVEN_API_KEY if you have an api key from https://beta.elevenlabs.io)'
+  echo 'no tts'
 fi
