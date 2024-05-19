@@ -250,7 +250,7 @@ std::vector<std::string> get_words(const std::string &txt) {
 
 const std::string k_prompt_whisper = R"(A conversation with a friend called {1}.)";
 
-const std::string k_prompt_llama = R"(<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+const std::string k_prompt_llama = R"(<|start_header_id|>system<|end_header_id|>
 
 Write a singular response to {0} as {1}, where the context is that {0} is talking with a friend named {1}.
 {1} is a character from My Little Pony: Frindship Is Magic.
@@ -405,7 +405,7 @@ int main(int argc, char ** argv) {
 
     //----------------------------------------------------------------
 
-    auto embd_inp = ::llama_tokenize(ctx_llama, prompt_llama, true);
+    auto embd_inp = ::llama_tokenize(ctx_llama, prompt_llama, true); // bos token is added here
 
     if (!path_session.empty()) {
         fprintf(stderr, "%s: attempting to load saved session from %s\n", __func__, path_session.c_str());
