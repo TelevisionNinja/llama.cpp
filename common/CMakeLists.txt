@@ -1,88 +1,95 @@
-# common
+# dependencies
 
 find_package(Threads REQUIRED)
 
-# Build info header
-#
+# third-party
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../.git")
-    set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.git")
+if (WHISPER_SDL2)
+    # SDL2
+    find_package(SDL2 REQUIRED)
 
-    # Is git submodule
-    if(NOT IS_DIRECTORY "${GIT_DIR}")
-        file(READ ${GIT_DIR} REAL_GIT_DIR_LINK)
-        string(REGEX REPLACE "gitdir: (.*)\n$" "\\1" REAL_GIT_DIR ${REAL_GIT_DIR_LINK})
-        string(FIND "${REAL_GIT_DIR}" "/" SLASH_POS)
-        if (SLASH_POS EQUAL 0)
-            set(GIT_DIR "${REAL_GIT_DIR}")
-        else()
-            set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../${REAL_GIT_DIR}")
-        endif()
-    endif()
+    string(STRIP "${SDL2_LIBRARIES}" SDL2_LIBRARIES)
 
-    if(EXISTS "${GIT_DIR}/index")
-        set(GIT_INDEX "${GIT_DIR}/index")
-    else()
-        message(WARNING "Git index not found in git repository.")
-        set(GIT_INDEX "")
-    endif()
-else()
-    message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
-    set(GIT_INDEX "")
+    message(STATUS "SDL2_INCLUDE_DIRS = ${SDL2_INCLUDE_DIRS}")
+    message(STATUS "SDL2_LIBRARIES    = ${SDL2_LIBRARIES}")
 endif()
 
-# Add a custom command to rebuild build-info.cpp when .git/index changes
-add_custom_command(
-    OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.cpp"
-    COMMENT "Generating build details from Git"
-    COMMAND ${CMAKE_COMMAND} -DMSVC=${MSVC} -DCMAKE_C_COMPILER_VERSION=${CMAKE_C_COMPILER_VERSION}
-            -DCMAKE_C_COMPILER_ID=${CMAKE_C_COMPILER_ID} -DCMAKE_VS_PLATFORM_NAME=${CMAKE_VS_PLATFORM_NAME}
-            -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/build-info-gen-cpp.cmake"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.."
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.cpp.in" ${GIT_INDEX}
-    VERBATIM
-)
-set(TARGET build_info)
-add_library(${TARGET} OBJECT build-info.cpp)
-if (BUILD_SHARED_LIBS)
-    set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if (WHISPER_CLBLAST)
+    find_package(CLBlast REQUIRED)
 endif()
+
+# common
 
 set(TARGET common)
 
-add_library(${TARGET} STATIC
-    base64.hpp
-    common.h
-    common.cpp
-    sampling.h
-    sampling.cpp
-    console.h
-    console.cpp
-    grammar-parser.h
-    grammar-parser.cpp
-    json.hpp
-    json-schema-to-grammar.cpp
-    train.h
-    train.cpp
-    ngram-cache.h
-    ngram-cache.cpp
-    )
+unset(COMMON_EXTRA_LIBS)
 
-if (BUILD_SHARED_LIBS)
-    set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if (WHISPER_FFMPEG)
+    # As of cmake 3.27, there is no official cmake support for FindFFmpeg.
+    # Consequnelty we added a FindFFmpeg.cmake script the cmake subfolder:
+    # whisper.cpp does not need the full ffmpeg libs, just AVFORMAT AVCODEC AVUTIL SWRESAMPLE
+    # libswresample  performs highly optimized audio resampling, rematrixing and sample format conversion operations
+    # libavcodec provides a generic encoding/decoding framework and contains multiple decoders and encoders for audio, video and subtitle streams, and several bitstream filters.
+    # libavformat provides a generic framework for multiplexing and demultiplexing (muxing and demuxing) audio, video and subtitle streams.
+    find_package(FFmpeg REQUIRED)
+
+    if (NOT ${FFMPEG_FOUND})
+        message(FATAL_ERROR "Cannot find ffmpeg libs/headers")
+    endif()
+
+    message(STATUS "Found ffmpeg libs:       ${FFMPEG_LIBRARIES}")
+    message(STATUS "Found ffmpeg headers in: ${FFMPEG_INCLUDE_DIRS}")
+    message(STATUS "ffmpeg definitions:      ${FFMPEG_DEFINITIONS}")
+    message(STATUS "Found avformat           ${AVFORMAT_VERSION}")
+
+    include_directories(${FFMPEG_INCLUDE_DIRS})
+    add_compile_definitions(WHISPER_FFMPEG)
+
+    list(APPEND COMMON_EXTRA_LIBS ${FFMPEG_LIBRARIES})
+
+    set(COMMON_SOURCES_FFMPEG ffmpeg-transcode.cpp)
 endif()
 
-set(LLAMA_COMMON_EXTRA_LIBS build_info)
 
-# Use curl to download model url
-if (LLAMA_CURL)
-    find_package(CURL REQUIRED)
-    add_definitions(-DLLAMA_USE_CURL)
-    include_directories(${CURL_INCLUDE_DIRS})
-    find_library(CURL_LIBRARY curl REQUIRED)
-    set(LLAMA_COMMON_EXTRA_LIBS ${LLAMA_COMMON_EXTRA_LIBS} ${CURL_LIBRARY})
-endif ()
+add_library(${TARGET} STATIC
+    common-talk.h
+    common-talk.cpp
+    common-ggml.h
+    common-ggml.cpp
+    grammar-parser.h
+    grammar-parser.cpp
+    ${COMMON_SOURCES_FFMPEG}
+    )
 
-target_include_directories(${TARGET} PUBLIC .)
-target_compile_features   (${TARGET} PUBLIC cxx_std_11)
-target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
+include(DefaultTargetOptions)
+
+target_link_libraries(${TARGET} PRIVATE whisper ${COMMON_EXTRA_LIBS})
+
+set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(${TARGET} PROPERTIES FOLDER "libs")
+
+if (WHISPER_SDL2)
+    # common-sdl
+
+    set(TARGET common-sdl)
+
+    add_library(${TARGET} STATIC
+        common-sdl.h
+        common-sdl.cpp
+        )
+
+    include(DefaultTargetOptions)
+
+    target_include_directories(${TARGET} PUBLIC  ${SDL2_INCLUDE_DIRS})
+    target_link_libraries     (${TARGET} PRIVATE ${SDL2_LIBRARIES})
+
+    set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    set_target_properties(${TARGET} PROPERTIES FOLDER "libs")
+endif()
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
+if (WHISPER_SDL2)
+    add_subdirectory(talk)
+    set_target_properties(talk PROPERTIES FOLDER "talk")
+endif (WHISPER_SDL2)
