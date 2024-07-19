@@ -1,5 +1,5 @@
-#include "../common-sdl.h"
-#include "../common-talk.h"
+#include "common-sdl.h"
+#include "common-talk.h"
 #include "whisper.h"
 #include "llama.h"
 
@@ -71,8 +71,8 @@ struct whisper_params {
     std::string language    = "en";
     std::string model_wsp   = "./models/ggml-small.en-q5_1.bin";
     std::string model_llama = "./models/Meta-Llama-3-8B-Instruct-IQ4_XS.gguf";
-    std::string speak       = "./src/llama.cpp/common/talk/speak.sh";
-    std::string speak_file  = "./src/llama.cpp/common/talk/to_speak.txt";
+    std::string speak       = "./src/llama.cpp/examples/talk/speak.sh";
+    std::string speak_file  = "./src/llama.cpp/examples/talk/to_speak.txt";
     std::string prompt      = "";
     std::string fname_out;
     std::string path_session = "";       // path to file for saving/loading model eval state

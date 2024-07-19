@@ -55,3 +55,8 @@ else()
     add_subdirectory(tokenize)
     add_subdirectory(train-text-from-scratch)
 endif()
+
+if (WHISPER_SDL2)
+    add_subdirectory(talk)
+    set_target_properties(talk PROPERTIES FOLDER "talk")
+endif (WHISPER_SDL2)

@@ -132,12 +132,12 @@ endif
 
 ifeq ($(shell sdl2-config --cflags --libs 2>/dev/null),)
 else
-	BUILD_TARGETS += \
-		command \
-		stream \
-		lsp \
-		talk \
-		talk-llama
+	# BUILD_TARGETS += \
+	# 	command \
+	# 	stream \
+	# 	lsp \
+	# 	talk \
+	# 	talk-llama
 endif
 
 default: $(BUILD_TARGETS)
@@ -173,7 +173,7 @@ endif
 #
 
 # keep standard at C11 and C++11
-MK_CPPFLAGS  = -Iggml/include -Iggml/src -Iinclude -Isrc -Iexamples
+MK_CPPFLAGS  = -Iggml/include -Iggml/src -Iinclude -Isrc -Iexamples -Icommon
 MK_CFLAGS    = -std=c11   -fPIC
 MK_CXXFLAGS  = -std=c++11 -fPIC
 MK_NVCCFLAGS = -std=c++11
@@ -780,18 +780,22 @@ OBJ_GGML += \
 	ggml/src/ggml.o \
 	ggml/src/ggml-alloc.o \
 	ggml/src/ggml-backend.o \
-	ggml/src/ggml-quants.o
+	ggml/src/ggml-quants.o \
+	ggml/src/ggml-aarch64.o
 
 OBJ_WHISPER += \
-	src/whisper.o
+	src/whisper.o \
+	src/llama.o \
+	src/unicode.o \
+	src/unicode-data.o
 
 OBJ_COMMON += \
-	examples/common.o \
-	examples/common-ggml.o \
-	examples/grammar-parser.o
+	common/common.o \
+	common/common-ggml.o \
+	common/grammar-parser.o
 
 OBJ_SDL += \
-	examples/common-sdl.o
+	common/common-sdl.o
 
 OBJ_ALL = $(OBJ_GGML) $(OBJ_WHISPER) $(OBJ_COMMON) $(OBJ_SDL)
 
@@ -911,6 +915,13 @@ ggml/src/ggml-quants.o: \
 	ggml/src/ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 
+ggml/src/ggml-aarch64.o: \
+	ggml/src/ggml-aarch64.c \
+	ggml/include/ggml.h \
+	ggml/src/ggml-aarch64.h \
+	ggml/src/ggml-common.h
+	$(CC) $(CFLAGS)    -c $< -o $@
+
 ggml/src/ggml-blas.o: \
 	ggml/src/ggml-blas.cpp \
 	ggml/include/ggml-blas.h
@@ -963,14 +974,14 @@ $(LIB_WHISPER_S): \
 
 # common
 
-examples/common.o: \
-	examples/common.cpp \
-	examples/common.h
+common/common.o: \
+	common/common-talk.cpp \
+	common/common-talk.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-examples/common-ggml.o: \
-	examples/common-ggml.cpp \
-	examples/common-ggml.h
+common/common-ggml.o: \
+	common/common-ggml.cpp \
+	common/common-ggml.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(LIB_COMMON): \
@@ -986,9 +997,9 @@ $(LIB_COMMON_S): \
 CFLAGS_SDL=$(shell sdl2-config --cflags)
 LDFLAGS_SDL=$(shell sdl2-config --libs)
 
-examples/common-sdl.o: \
-	examples/common-sdl.cpp \
-	examples/common-sdl.h
+common/common-sdl.o: \
+	common/common-sdl.cpp \
+	common/common-sdl.h
 	$(CXX) $(CXXFLAGS) $(CFLAGS_SDL) -c $< -o $@
 
 $(LIB_COMMON_SDL): \
@@ -1005,6 +1016,7 @@ clean:
 	rm -rvf src/coreml/*.o
 	rm -rvf tests/*.o
 	rm -rvf examples/*.o
+	rm -rvf common/*.o
 	rm -rvf *.a
 	rm -rvf *.dll
 	rm -rvf *.so
@@ -1031,7 +1043,7 @@ clean:
 # Helper function that replaces .c, .cpp, and .cu file endings with .o:
 GET_OBJ_FILE = $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(patsubst %.cu,%.o,$(1))))
 
-talk: common/talk/talk.cpp llama.cpp unicode.cpp unicode-data.cpp \
+talk: examples/talk/talk.cpp \
 	$(OBJ_GGML) $(OBJ_WHISPER) $(OBJ_COMMON) $(OBJ_SDL)
 	$(CXX) $(CXXFLAGS) $(CFLAGS_SDL) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LDFLAGS_SDL)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LDFLAGS_SDL) -o talk.exe
