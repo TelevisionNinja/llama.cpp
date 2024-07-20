@@ -107,6 +107,14 @@ add_library(whisper
             whisper-mel.hpp
             )
 
+add_library(llama
+            ../include/llama.h
+            llama.cpp
+            unicode.h
+            unicode.cpp
+            unicode-data.cpp
+            )
+
 # TODO: disabled because it relies on ggml internals that are no longer accessible (ggml-backend-impl.h, ggml-cuda/common.cuh, ..)
 #if (GGML_CUDA)
 #    target_sources(whisper PRIVATE whisper-mel-cuda.cu)
@@ -123,11 +131,15 @@ set_target_properties(whisper PROPERTIES
 target_include_directories(whisper PUBLIC . ../include)
 target_compile_features   (whisper PUBLIC cxx_std_11) # don't bump
 
+target_include_directories(llama PUBLIC . ../include)
+
 if (WHISPER_EXTRA_FLAGS)
     target_compile_options(whisper PRIVATE ${WHISPER_EXTRA_FLAGS})
 endif()
 
 target_link_libraries(whisper PUBLIC ggml)
+
+target_link_libraries(llama PUBLIC ggml)
 
 if (WHISPER_COREML)
     target_link_libraries(whisper PRIVATE whisper.coreml)
@@ -144,4 +156,7 @@ endif()
 if (BUILD_SHARED_LIBS)
     set_target_properties(whisper PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(whisper PRIVATE WHISPER_SHARED WHISPER_BUILD)
+
+    set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_compile_definitions(llama PRIVATE LLAMA_SHARED LLAMA_BUILD)
 endif()

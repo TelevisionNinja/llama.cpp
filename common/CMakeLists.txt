@@ -68,6 +68,8 @@ target_link_libraries(${TARGET} PRIVATE whisper ${COMMON_EXTRA_LIBS})
 set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(${TARGET} PROPERTIES FOLDER "libs")
 
+target_include_directories(${TARGET} PUBLIC .)
+
 if (WHISPER_SDL2)
     # common-sdl
 
@@ -85,6 +87,8 @@ if (WHISPER_SDL2)
 
     set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     set_target_properties(${TARGET} PROPERTIES FOLDER "libs")
+
+    target_include_directories(${TARGET} PUBLIC .)
 endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})

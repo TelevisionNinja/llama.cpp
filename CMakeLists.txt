@@ -173,3 +173,4 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/whisper.pc"
 #
 
 add_subdirectory(common)
+add_subdirectory(examples)
